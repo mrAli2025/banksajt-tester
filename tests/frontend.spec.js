@@ -73,7 +73,7 @@ test.describe('Frontend – godkänt nivå', () => {
     await expect(page.getByText(/saldo|balance/i).first()).toBeVisible();
     await expect(page.getByText(/0\s*(kr|sek)/i).first()).toBeVisible();
 
-    await page.getByLabel(/belopp|summa|amount/i).fill('250');
+    await page.getByLabel(/^belopp$/i).fill('250');
     const transactionResponsePromise = page.waitForResponse(
       (response) =>
         new URL(response.url()).pathname === '/me/accounts/transactions' &&
