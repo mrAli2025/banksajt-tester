@@ -31,7 +31,7 @@ test.describe('Banksajt E2E', () => {
 
     await page.waitForURL('**/account');
     await expect(page.getByText(/saldo: 0 kr/i)).toBeVisible();
-    await page.getByLabel(/belopp/i).fill('250');
+    await page.getByLabel(/^belopp$/i).fill('250');
     await page.getByRole('button', { name: /sätt in pengar/i }).click();
     await expect(page.getByText(/saldo: 250 kr/i)).toBeVisible();
 
@@ -55,7 +55,7 @@ test.describe('Banksajt E2E', () => {
     await page.getByRole('button', { name: /logga in/i }).click();
     await page.waitForURL('**/account');
 
-    await page.getByLabel(/belopp/i).fill('100');
+    await page.getByLabel(/^belopp$/i).fill('100');
     await page.getByRole('button', { name: /sätt in pengar/i }).click();
     await expect(page.getByText(/saldo: 100 kr/i)).toBeVisible();
 
@@ -75,8 +75,95 @@ test.describe('Banksajt E2E', () => {
 
     await page.goto('/account');
     await expect(page.getByText(/saldo: 100 kr/i)).toBeVisible();
-    await page.getByLabel(/belopp/i).fill('-50');
+    await page.getByLabel(/^belopp$/i).fill('-50');
     await page.getByRole('button', { name: /sätt in pengar/i }).click();
     await expect(page.getByText(/saldo: 100 kr/i)).toBeVisible();
+  });
+  test('ett lyckat uttag minskar saldot och syns i historiken', async ({ page }) => {
+    const username = uniqueUsername();
+    const password = 'test123';
+
+    await page.goto('/register');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /skapa användare/i }).click();
+
+    await page.waitForURL('**/login');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /logga in/i }).click();
+    await page.waitForURL('**/account');
+
+    await page.getByLabel(/^belopp$/i).fill('500');
+    await page.getByRole('button', { name: /sätt in pengar/i }).click();
+    await expect(page.getByText(/saldo: 500 kr/i)).toBeVisible();
+
+    await page.getByLabel(/ta ut belopp/i).fill('200');
+    await page.getByRole('button', { name: /ta ut pengar/i }).click();
+    await expect(page.getByText(/saldo: 300 kr/i)).toBeVisible();
+
+    await page.getByRole('link', { name: /transaktionshistorik/i }).click();
+    await page.waitForURL('**/transactions');
+    await expect(page.getByText(/uttag/i).first()).toBeVisible();
+    await expect(page.getByText(/-200 kr/i).first()).toBeVisible();
+  });
+
+  test('ett uttag större än saldot nekas och ändrar varken saldo eller historik', async ({ page }) => {
+    const username = uniqueUsername();
+    const password = 'test123';
+
+    await page.goto('/register');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /skapa användare/i }).click();
+
+    await page.waitForURL('**/login');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /logga in/i }).click();
+    await page.waitForURL('**/account');
+
+    await page.getByLabel(/^belopp$/i).fill('100');
+    await page.getByRole('button', { name: /sätt in pengar/i }).click();
+    await expect(page.getByText(/saldo: 100 kr/i)).toBeVisible();
+
+    await page.getByLabel(/ta ut belopp/i).fill('500');
+    await page.getByRole('button', { name: /ta ut pengar/i }).click();
+    await expect(page.getByText(/saldo: 100 kr/i)).toBeVisible();
+
+    await page.getByRole('link', { name: /transaktionshistorik/i }).click();
+    await page.waitForURL('**/transactions');
+    await expect(page.getByText(/uttag/i)).toHaveCount(0);
+  });
+
+  test('saldo och historik efter uttag finns kvar efter omladdning', async ({ page }) => {
+    const username = uniqueUsername();
+    const password = 'test123';
+
+    await page.goto('/register');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /skapa användare/i }).click();
+
+    await page.waitForURL('**/login');
+    await page.getByLabel(/användarnamn/i).fill(username);
+    await page.getByLabel(/lösenord/i).fill(password);
+    await page.getByRole('button', { name: /logga in/i }).click();
+    await page.waitForURL('**/account');
+
+    await page.getByLabel(/^belopp$/i).fill('400');
+    await page.getByRole('button', { name: /sätt in pengar/i }).click();
+    await expect(page.getByText(/saldo: 400 kr/i)).toBeVisible();
+
+    await page.getByLabel(/ta ut belopp/i).fill('150');
+    await page.getByRole('button', { name: /ta ut pengar/i }).click();
+    await expect(page.getByText(/saldo: 250 kr/i)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText(/saldo: 250 kr/i)).toBeVisible();
+
+    await page.getByRole('link', { name: /transaktionshistorik/i }).click();
+    await page.waitForURL('**/transactions');
+    await expect(page.getByText(/-150 kr/i).first()).toBeVisible();
   });
 });

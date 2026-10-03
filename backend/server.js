@@ -2,7 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import pool from './db.js';
-import { validateAmount } from './src/validateAmount.js';
+import { validateAmount, validateWithdrawal } from './src/validateAmount.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -154,6 +154,59 @@ app.post('/me/accounts/transactions', async (req, res) => {
         await connection.query(
             'INSERT INTO transactions (accountId, type, amount) VALUES (?, ?, ?)',
             [account.id, 'deposit', amount]
+        );
+
+        await connection.commit();
+
+        res.status(200).json({ amount: newAmount });
+    } catch (err) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error(err);
+        res.status(500).json({ error: 'Något gick fel' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+});
+
+// Ta ut pengar
+app.post('/me/accounts/withdrawals', async (req, res) => {
+    const { token, amount } = req.body;
+
+    let connection;
+
+    try {
+        const result = await getAccountFromToken(token);
+
+        if (result.error === 'session') {
+            return res.status(401).json({ error: 'Ogiltig token' });
+        }
+        if (result.error === 'account') {
+            return res.status(404).json({ error: 'Konto hittades inte' });
+        }
+
+        const account = result.account;
+
+        if (!validateWithdrawal(amount, account.amount)) {
+            return res.status(400).json({ error: 'Ogiltigt uttag eller otillräckligt saldo' });
+        }
+
+        const newAmount = account.amount - amount;
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        await connection.query(
+            'UPDATE accounts SET amount = ? WHERE id = ?',
+            [newAmount, account.id]
+        );
+
+        await connection.query(
+            'INSERT INTO transactions (accountId, type, amount) VALUES (?, ?, ?)',
+            [account.id, 'withdrawal', amount]
         );
 
         await connection.commit();
