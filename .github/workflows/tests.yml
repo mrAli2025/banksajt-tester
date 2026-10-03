@@ -90,6 +90,13 @@ jobs:
               userId INT NOT NULL,
               token VARCHAR(256) NOT NULL
           );
+          CREATE TABLE transactions (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              accountId INT NOT NULL,
+              type ENUM('deposit', 'withdrawal') NOT NULL DEFAULT 'deposit',
+              amount INT NOT NULL,
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
           "
 
       - name: Bygg frontend
