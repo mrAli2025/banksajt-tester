@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const FEATURE_NEW_DASHBOARD = process.env.NEXT_PUBLIC_FEATURE_NEW_DASHBOARD === "true";
 
@@ -100,6 +101,13 @@ export default function Account() {
             Sätt in pengar
           </button>
         </form>
+
+        <Link
+          href="/transactions"
+          className="text-center text-sm font-medium underline underline-offset-4"
+        >
+          Visa transaktionshistorik
+        </Link>
       </div>
     </div>
   );

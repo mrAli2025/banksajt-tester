@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   token VARCHAR(256) NOT NULL,
   PRIMARY KEY (id)
 );
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  accountId INT UNSIGNED NOT NULL,
+  type ENUM('deposit', 'withdrawal') NOT NULL DEFAULT 'deposit',
+  amount INT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY transactions_account_id_index (accountId)
+);

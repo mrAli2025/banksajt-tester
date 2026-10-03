@@ -2,6 +2,7 @@ import express from 'express';
 import bodyParser from 'body-parser';
 import cors from 'cors';
 import pool from './db.js';
+import { validateAmount } from './src/validateAmount.js';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -14,6 +15,31 @@ app.use(bodyParser.json());
 function generateOTP() {
     const otp = Math.floor(100000 + Math.random() * 900000);
     return otp.toString();
+}
+
+// Hjälpfunktion: slå upp session + konto från ett token
+async function getAccountFromToken(token) {
+    const [sessionRows] = await pool.query(
+        'SELECT * FROM sessions WHERE token = ?',
+        [token]
+    );
+
+    if (sessionRows.length === 0) {
+        return { error: 'session' };
+    }
+
+    const session = sessionRows[0];
+
+    const [accountRows] = await pool.query(
+        'SELECT * FROM accounts WHERE userId = ?',
+        [session.userId]
+    );
+
+    if (accountRows.length === 0) {
+        return { error: 'account' };
+    }
+
+    return { account: accountRows[0] };
 }
 
 // Skapa användare
@@ -78,27 +104,16 @@ app.post('/me/accounts', async (req, res) => {
     const { token } = req.body;
 
     try {
-        const [sessionRows] = await pool.query(
-            'SELECT * FROM sessions WHERE token = ?',
-            [token]
-        );
+        const result = await getAccountFromToken(token);
 
-        if (sessionRows.length === 0) {
+        if (result.error === 'session') {
             return res.status(401).json({ error: 'Ogiltig token' });
         }
-
-        const session = sessionRows[0];
-
-        const [accountRows] = await pool.query(
-            'SELECT * FROM accounts WHERE userId = ?',
-            [session.userId]
-        );
-
-        if (accountRows.length === 0) {
+        if (result.error === 'account') {
             return res.status(404).json({ error: 'Konto hittades inte' });
         }
 
-        res.status(200).json({ amount: accountRows[0].amount });
+        res.status(200).json({ amount: result.account.amount });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Något gick fel' });
@@ -109,35 +124,74 @@ app.post('/me/accounts', async (req, res) => {
 app.post('/me/accounts/transactions', async (req, res) => {
     const { token, amount } = req.body;
 
-    try {
-        const [sessionRows] = await pool.query(
-            'SELECT * FROM sessions WHERE token = ?',
-            [token]
-        );
+    if (!validateAmount(amount)) {
+        return res.status(400).json({ error: 'Ogiltigt belopp' });
+    }
 
-        if (sessionRows.length === 0) {
+    let connection;
+
+    try {
+        const result = await getAccountFromToken(token);
+
+        if (result.error === 'session') {
             return res.status(401).json({ error: 'Ogiltig token' });
         }
-
-        const session = sessionRows[0];
-
-        const [accountRows] = await pool.query(
-            'SELECT * FROM accounts WHERE userId = ?',
-            [session.userId]
-        );
-
-        if (accountRows.length === 0) {
+        if (result.error === 'account') {
             return res.status(404).json({ error: 'Konto hittades inte' });
         }
 
-        const newAmount = accountRows[0].amount + amount;
+        const account = result.account;
+        const newAmount = account.amount + amount;
 
-        await pool.query(
-            'UPDATE accounts SET amount = ? WHERE userId = ?',
-            [newAmount, session.userId]
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        await connection.query(
+            'UPDATE accounts SET amount = ? WHERE id = ?',
+            [newAmount, account.id]
         );
 
+        await connection.query(
+            'INSERT INTO transactions (accountId, type, amount) VALUES (?, ?, ?)',
+            [account.id, 'deposit', amount]
+        );
+
+        await connection.commit();
+
         res.status(200).json({ amount: newAmount });
+    } catch (err) {
+        if (connection) {
+            await connection.rollback();
+        }
+        console.error(err);
+        res.status(500).json({ error: 'Något gick fel' });
+    } finally {
+        if (connection) {
+            connection.release();
+        }
+    }
+});
+
+// Hämta transaktionshistorik
+app.post('/me/transactions', async (req, res) => {
+    const { token } = req.body;
+
+    try {
+        const result = await getAccountFromToken(token);
+
+        if (result.error === 'session') {
+            return res.status(401).json({ error: 'Ogiltig token' });
+        }
+        if (result.error === 'account') {
+            return res.status(404).json({ error: 'Konto hittades inte' });
+        }
+
+        const [transactions] = await pool.query(
+            'SELECT id, type, amount, created_at FROM transactions WHERE accountId = ? ORDER BY created_at DESC, id DESC',
+            [result.account.id]
+        );
+
+        res.status(200).json({ transactions });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Något gick fel' });
