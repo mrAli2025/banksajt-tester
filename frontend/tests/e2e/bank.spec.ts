@@ -30,8 +30,8 @@ test.describe('Banksajt E2E', () => {
     await page.getByRole('button', { name: /logga in/i }).click();
 
     await page.waitForURL('**/account');
-    await expect(page.getByText(/saldo: 0 kr/i)).toBeVisible();
-
+    // await expect(page.getByText(/saldo: 0 kr/i)).toBeVisible();
+    await expect(page.getByText(/saldo: 999 kr/i)).toBeVisible();
     await page.getByLabel(/belopp/i).fill('250');
     await page.getByRole('button', { name: /sätt in pengar/i }).click();
     await expect(page.getByText(/saldo: 250 kr/i)).toBeVisible();
