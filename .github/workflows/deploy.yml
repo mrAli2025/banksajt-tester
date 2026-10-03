@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 
-      
 jobs:
-  build-and-deploy:
+  frontend:
+    name: Frontend – lint och build
     runs-on: ubuntu-latest
 
     steps:
@@ -31,6 +34,87 @@ jobs:
         working-directory: ./frontend
         run: npm run build
 
+  backend:
+    name: Backend – Vitest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Installera Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Run Vitest
+        working-directory: ./backend
+        run: npm test
+
+  e2e:
+    name: E2E – Playwright
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Installera Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Installera Playwright Chromium
+        working-directory: ./frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Starta teststacken med Docker Compose
+        run: docker compose -f docker-compose.test.yml up -d --build
+
+      - name: Vänta tills tjänsterna svarar
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:3002 > /dev/null && curl -sf http://127.0.0.1:3011/me/accounts -X POST -H "Content-Type: application/json" -d '{}' > /dev/null; then
+              echo "Tjänsterna svarar"
+              exit 0
+            fi
+            echo "Väntar på tjänsterna... ($i)"
+            sleep 2
+          done
+          echo "::error::Tjänsterna startade inte i tid"
+          exit 1
+
+      - name: Kör Playwright-tester
+        working-directory: ./frontend
+        run: npx playwright test
+
+      - name: Ladda upp testrapport vid fel
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+
+      - name: Stäng ner teststacken
+        if: always()
+        run: docker compose -f docker-compose.test.yml down -v
+
+  deploy:
+    name: Deploy till EC2
+    needs: [frontend, backend, e2e]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Run Docker on EC2
         uses: appleboy/ssh-action@master
         with:
