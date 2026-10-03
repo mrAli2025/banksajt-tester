@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
 function formatDate(dateString) {
@@ -15,10 +16,16 @@ function formatDate(dateString) {
 export default function Transactions() {
   const [transactions, setTransactions] = useState(null);
   const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     const fetchTransactions = async () => {
       const token = localStorage.getItem("token");
+
+      if (!token) {
+        router.push("/login");
+        return;
+      }
 
       try {
         const response = await fetch(`${API_URL}/me/transactions`, {
@@ -41,7 +48,7 @@ export default function Transactions() {
     };
 
     fetchTransactions();
-  }, []);
+  }, [router]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-zinc-50 dark:bg-black px-4 py-12">

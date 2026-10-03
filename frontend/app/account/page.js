@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 const FEATURE_NEW_DASHBOARD = process.env.NEXT_PUBLIC_FEATURE_NEW_DASHBOARD === "true";
 
@@ -9,10 +10,16 @@ export default function Account() {
   const [amount, setAmount] = useState(null);
   const [deposit, setDeposit] = useState("");
   const [error, setError] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     const fetchBalance = async () => {
       const token = localStorage.getItem("token");
+
+      if (!token) {
+        router.push("/login");
+        return;
+      }
 
       try {
         const response = await fetch(`${API_URL}/me/accounts`, {
@@ -35,7 +42,7 @@ export default function Account() {
     };
 
     fetchBalance();
-  }, []);
+  }, [router]);
 
   const handleDeposit = async (e) => {
     e.preventDefault();
@@ -49,7 +56,7 @@ export default function Account() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ token, amount: Number(deposit) }),
+        body: JSON.stringify({ token: token, amount: Number(deposit) }),
       });
 
       if (!response.ok) {
