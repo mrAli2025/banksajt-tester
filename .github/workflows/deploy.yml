@@ -82,7 +82,11 @@ jobs:
       - name: Vänta tills tjänsterna svarar
         run: |
           for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:3002 > /dev/null && curl -sf http://127.0.0.1:3011/me/accounts -X POST -H "Content-Type: application/json" -d '{}' > /dev/null; then
+            FRONTEND_OK=0
+            BACKEND_OK=0
+            curl -sf http://127.0.0.1:3002 > /dev/null && FRONTEND_OK=1
+            curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3011/me/accounts -X POST -H "Content-Type: application/json" -d '{}' | grep -qE '^[0-9]{3}$' && BACKEND_OK=1
+            if [ "$FRONTEND_OK" = "1" ] && [ "$BACKEND_OK" = "1" ]; then
               echo "Tjänsterna svarar"
               exit 0
             fi
@@ -90,6 +94,7 @@ jobs:
             sleep 2
           done
           echo "::error::Tjänsterna startade inte i tid"
+          docker compose -f docker-compose.test.yml logs
           exit 1
 
       - name: Kör Playwright-tester
